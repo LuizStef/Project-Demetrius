@@ -3,6 +3,7 @@ from soul import Soul
 from smart_memory import SmartMemory
 from semantic_memory import SemanticMemory
 from core import Core
+from permissions import PermissionSystem
 from config import NAME, VERSION, VALID_MOODS
 from exceptions import InvalidMoodError
 
@@ -19,6 +20,7 @@ class Demetrius(Assistant):
         self.memory = SmartMemory()
         self.semantic = SemanticMemory()
         self.core = Core()
+        self.permissions = PermissionSystem()
 
     def get_mood(self):
         return self.__mood
@@ -31,6 +33,11 @@ class Demetrius(Assistant):
 
     @log_action
     def respond(self, message):
+        # Check permission before doing anything
+        if not self.permissions.request_permission(message):
+            print(f"[{self.name}]: Action not authorized.")
+            return
+
         self.memory.save_memory("user", message)
         history = list(self.memory.stream_history())
         self.semantic.add(message)
