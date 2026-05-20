@@ -3,7 +3,7 @@ from soul import Soul
 from smart_memory import SmartMemory
 from semantic_memory import SemanticMemory
 from core import Core
-from permissions import PermissionSystem
+from model_manager import ModelManager
 from config import NAME, VERSION, VALID_MOODS
 from exceptions import InvalidMoodError
 
@@ -15,12 +15,19 @@ def log_action(func):
 class Demetrius(Assistant):
     def __init__(self, username):
         super().__init__(NAME, VERSION)
-        self.__mood = "neutral"
-        self.soul = Soul(username, "casual")
-        self.memory = SmartMemory()
-        self.semantic = SemanticMemory()
-        self.core = Core()
-        self.permissions = PermissionSystem()
+        self.__mood    = "neutral"
+        self.soul      = Soul(username, "casual")
+        self.memory    = SmartMemory()
+        self.semantic  = SemanticMemory()
+        self.models    = ModelManager()
+
+        # Load saved model config
+        cfg = self.models.load_config()
+        self.core = Core(
+            provider=cfg["provider"],
+            model=cfg["model"],
+            api_key=cfg["api_key"]
+        )
 
     def get_mood(self):
         return self.__mood
@@ -31,17 +38,15 @@ class Demetrius(Assistant):
         else:
             raise InvalidMoodError(value)
 
+    def get_model_info(self):
+        return f"{self.core.provider} — {self.core.model}"
+
     @log_action
     def respond(self, message):
-        # Check permission before doing anything
-        if not self.permissions.request_permission(message):
-            print(f"[{self.name}]: Action not authorized.")
-            return
-
         self.memory.save_memory("user", message)
-        history = list(self.memory.stream_history())
+        history  = list(self.memory.stream_history())
         self.semantic.add(message)
-        context = self.semantic.search(message)
+        context  = self.semantic.search(message)
         response = self.core.think(message, history, context)
         self.memory.save_memory("jarvis", response)
-        print(f"[{self.name}]: {response}")
+        return response
