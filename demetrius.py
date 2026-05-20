@@ -4,6 +4,7 @@ from smart_memory import SmartMemory
 from semantic_memory import SemanticMemory
 from core import Core
 from model_manager import ModelManager
+from personality import Personality
 from config import NAME, VERSION, VALID_MOODS
 from exceptions import InvalidMoodError
 
@@ -15,13 +16,13 @@ def log_action(func):
 class Demetrius(Assistant):
     def __init__(self, username):
         super().__init__(NAME, VERSION)
-        self.__mood    = "neutral"
-        self.soul      = Soul(username, "casual")
-        self.memory    = SmartMemory()
-        self.semantic  = SemanticMemory()
-        self.models    = ModelManager()
+        self.__mood      = "neutral"
+        self.soul        = Soul(username, "casual")
+        self.memory      = SmartMemory()
+        self.semantic    = SemanticMemory()
+        self.personality = Personality()
+        self.models      = ModelManager()
 
-        # Load saved model config
         cfg = self.models.load_config()
         self.core = Core(
             provider=cfg["provider"],
@@ -43,10 +44,14 @@ class Demetrius(Assistant):
 
     @log_action
     def respond(self, message):
+        # Extract interests from message
+        self.personality.extract_interests(message)
+
         self.memory.save_memory("user", message)
-        history  = list(self.memory.stream_history())
+        history             = list(self.memory.stream_history())
         self.semantic.add(message)
-        context  = self.semantic.search(message)
-        response = self.core.think(message, history, context)
+        context             = self.semantic.search(message)
+        personality_prompt  = self.personality.build_personality_prompt()
+        response            = self.core.think(message, history, context, personality_prompt)
         self.memory.save_memory("jarvis", response)
         return response

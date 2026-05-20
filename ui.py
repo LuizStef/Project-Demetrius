@@ -1,3 +1,4 @@
+import profile
 import sys
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout,
@@ -168,6 +169,16 @@ class DemetriusUI(QMainWindow):
         self._build()
         self._post("Demetrius", f"Hello, {username}.", "assistant")
         self._post("System", "Type a message or use the menu.", "system")
+    
+    def _feedback_good(self):
+        if hasattr(self, '_DemetriusUI__last_response'):
+            self.demetrius.personality.add_feedback("", self.__last_response, 1)
+            self._post("System", "Feedback saved — good response.", "system")
+
+    def _feedback_bad(self):
+        if hasattr(self, '_DemetriusUI__last_response'):
+            self.demetrius.personality.add_feedback("", self.__last_response, -1)
+            self._post("System", "Feedback saved — bad response.", "system")
 
     # ── BUILD ─────────────────────────────────────────────────────────────────
 
@@ -317,6 +328,17 @@ class DemetriusUI(QMainWindow):
                 self._post("System", str(e), "error")
         elif m == "!help":
             self._post("System", self._help_text(), "system")
+        
+        elif m == "!good":
+            self._feedback_good()
+        elif m == "!bad":
+            self._feedback_bad()
+        elif m == "!profile":
+            profile = self.demetrius.personality.get_profile()
+            interests = ", ".join(profile["interests"]) or "none yet"
+            vocab     = ", ".join(profile["vocabulary"]) or "none yet"
+            self._post("System", f"Interests: {interests}\nVocabulary: {vocab}", "system")
+            
         else:
             self._post("System", "...", "system")
             self.worker = WorkerThread(self.demetrius, msg)
@@ -437,26 +459,29 @@ class DemetriusUI(QMainWindow):
             "error":     THEME["error"],
             "jarvis":    THEME["assistant"],
         }
-        c = colors.get(role, THEME["text"])
-        safe = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\n", "<br>")
+        c    = colors.get(role, THEME["text"])
+        safe = (text.replace("&", "&amp;")
+                    .replace("<", "&lt;")
+                    .replace(">", "&gt;")
+                    .replace("\n", "<br>"))
 
         if role == "user":
-            html = f'<p style="margin:14px 0 2px 0;color:{THEME["text_dim"]};font-size:11px;">{sender}</p><p style="margin:0 0 14px 0;color:{c};">{safe}</p>'
+            html = (f'<p style="margin:14px 0 2px 0;color:{THEME["text_dim"]};font-size:11px;">{sender}</p>'
+                    f'<p style="margin:0 0 14px 0;color:{c};">{safe}</p>')
         elif role in ("assistant", "jarvis"):
-            html = f'<p style="margin:14px 0 2px 0;color:{THEME["text_dim"]};font-size:11px;">Demetrius</p><p style="margin:0 0 14px 0;color:{c};">{safe}</p>'
+            html = (f'<p style="margin:14px 0 2px 0;color:{THEME["text_dim"]};font-size:11px;">Demetrius '
+                    f'<span style="color:#333;cursor:pointer;" title="Good response" '
+                    f'onclick="void(0)">+</span> '
+                    f'<span style="color:#333;cursor:pointer;" title="Bad response" '
+                    f'onclick="void(0)">−</span></p>'
+                    f'<p style="margin:0 0 14px 0;color:{c};">{safe}</p>')
+            self.__last_response = text
         else:
             html = f'<p style="margin:6px 0;color:{c};font-size:11px;">{safe}</p>'
 
         self.chat.append(html)
         sb = self.chat.verticalScrollBar()
         sb.setValue(sb.maximum())
-
-    def _help_text(self):
-        return (
-            "!clear · !history · !stats · !backup · !sysinfo\n"
-            "!open [app] · !run [script] · !ls [path]\n"
-            "!mkdir [name] · !find [file] · !mood [neutral|excited|tired]"
-        )
 
     # ── THEME ─────────────────────────────────────────────────────────────────
 

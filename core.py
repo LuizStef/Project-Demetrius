@@ -9,16 +9,23 @@ class Core:
         self.__provider = provider
         self.__model    = model
         self.__api_key  = api_key
-        today = datetime.now().strftime("%d/%m/%Y %H:%M")
-        self.__system_prompt = f"""You are Demetrius, a personal AI assistant created by Luiz Stefanelli.
+        self.__today    = datetime.now().strftime("%d/%m/%Y %H:%M")
+
+    def __build_system_prompt(self, personality_prompt=""):
+        base = f"""You are Demetrius, a personal AI assistant created by Luiz Stefanelli.
 You are helpful, intelligent and slightly informal.
-Today is {today}.
+Today is {self.__today}.
 Always respond concisely and directly.
 Always respond in the same language the user is speaking.
 Keep your language clean and respectful."""
 
-    def think(self, message, history=[], context=[]):
-        messages = [{"role": "system", "content": self.__system_prompt}]
+        if personality_prompt:
+            base += f"\n\nUser profile:\n{personality_prompt}"
+
+        return base
+
+    def think(self, message, history=[], context=[], personality_prompt=""):
+        messages = [{"role": "system", "content": self.__build_system_prompt(personality_prompt)}]
 
         if context:
             messages.append({
@@ -52,27 +59,27 @@ Keep your language clean and respectful."""
         if not provider_config:
             raise DemetriusOfflineError()
 
-        url = f"{provider_config['url']}/chat/completions"
+        url     = f"{provider_config['url']}/chat/completions"
         headers = {
             "Authorization": f"Bearer {self.__api_key}",
-            "Content-Type": "application/json",
+            "Content-Type":  "application/json",
         }
 
         if self.__provider == "anthropic":
             headers = {
-                "x-api-key": self.__api_key,
+                "x-api-key":         self.__api_key,
                 "anthropic-version": "2023-06-01",
-                "Content-Type": "application/json",
+                "Content-Type":      "application/json",
             }
-            url = "https://api.anthropic.com/v1/messages"
+            url    = "https://api.anthropic.com/v1/messages"
             system = next((m["content"] for m in messages if m["role"] == "system"), "")
-            msgs = [m for m in messages if m["role"] != "system"]
+            msgs   = [m for m in messages if m["role"] != "system"]
             payload = {"model": self.__model, "max_tokens": 1024, "system": system, "messages": msgs}
         else:
             payload = {"model": self.__model, "messages": messages}
 
         response = requests.post(url, headers=headers, json=payload, timeout=30)
-        data = response.json()
+        data     = response.json()
 
         if self.__provider == "anthropic":
             return data["content"][0]["text"]
