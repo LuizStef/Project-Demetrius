@@ -408,6 +408,51 @@ class DemetriusUI(QMainWindow):
             vocab     = ", ".join(profile["vocabulary"]) or "none yet"
             self._post("System", f"Interests: {interests}\nVocabulary: {vocab}", "system")
             
+        elif m == "!emails":
+            if not hasattr(self, "google"):
+                from integrations import GoogleIntegration
+                self.google = GoogleIntegration()
+            emails = self.google.get_emails()
+            if not emails:
+                self._post("System", "No unread emails.", "system")
+            else:
+                for e in emails:
+                    self._post("System", f"From: {e['from']}\nSubject: {e['subject']}\n{e['snippet']}", "system")
+
+        elif m == "!events":
+            if not hasattr(self, "google"):
+                from integrations import GoogleIntegration
+                self.google = GoogleIntegration()
+            events = self.google.get_events()
+            if not events:
+                self._post("System", "No upcoming events.", "system")
+            else:
+                for e in events:
+                    start = e["start"].get("dateTime", e["start"].get("date"))
+                    self._post("System", f"{e['summary']} — {start}", "system")
+
+        elif m == "!tasks":
+            if not hasattr(self, "google"):
+                from integrations import GoogleIntegration
+                self.google = GoogleIntegration()
+            tasks = self.google.get_tasks()
+            if not tasks:
+                self._post("System", "No pending tasks.", "system")
+            else:
+                for t in tasks:
+                    self._post("System", f"[ ] {t['title']} — {t['due']}", "system")
+
+        elif m == "!drive":
+            if not hasattr(self, "google"):
+                from integrations import GoogleIntegration
+                self.google = GoogleIntegration()
+            files = self.google.list_drive_files()
+            if not files:
+                self._post("System", "No files found.", "system")
+            else:
+                for f in files:
+                    self._post("System", f"{f['name']} — {f['mimeType']}", "system")
+            
         else:
             self._post("System", "...", "system")
             self.worker = WorkerThread(self.demetrius, msg)
@@ -519,7 +564,15 @@ class DemetriusUI(QMainWindow):
         menu.exec(self.mapToGlobal(self.rect().topRight()))
         menu.addAction("Encrypted Backup", lambda: self._post("System", str(self.security.backup(encrypt=True)), "system"))
         menu.addAction("View Logs",        self._view_logs)
-
+        
+    def _help_text(self):
+        return (
+            "!clear · !history · !stats · !backup · !sysinfo · !logs\n"
+            "!open [app] · !run [script] · !ls [path]\n"
+            "!mkdir [name] · !find [file] · !mood [neutral|excited|tired]\n"
+            "!good · !bad · !profile\n"
+            "!emails · !events · !tasks · !drive"
+    )
     # ── POSTS ─────────────────────────────────────────────────────────────────
 
     def _post(self, sender, text, role):
