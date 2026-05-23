@@ -66,6 +66,14 @@ ICONS = {
         <rect x="9" y="9" width="6" height="6" stroke="#e0e0e0" stroke-width="1.5"/>
         <path d="M9 2v2M15 2v2M9 20v2M15 20v2M2 9h2M2 15h2M20 9h2M20 15h2" stroke="#e0e0e0" stroke-width="1.5" stroke-linecap="round"/>
     </svg>''',
+    "mic": '''<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 2a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z" stroke="#e0e0e0" stroke-width="1.5"/>
+        <path d="M19 10a7 7 0 0 1-14 0M12 19v3M8 22h8" stroke="#e0e0e0" stroke-width="1.5" stroke-linecap="round"/>
+    </svg>''',
+
+    "mic_off": '''<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M15 9.34V5a3 3 0 0 0-5.68-1.33M12 19v3M8 22h8M19 10a7 7 0 0 1-1.2 3.9M5 10a7 7 0 0 0 9.9 6.5M3 3l18 18" stroke="#e0e0e0" stroke-width="1.5" stroke-linecap="round"/>
+    </svg>''',
 }
 
 # ─── WORKER ───────────────────────────────────────────────────────────────────
@@ -261,6 +269,17 @@ class DemetriusUI(QMainWindow):
         self.input.returnPressed.connect(self._send)
         h.addWidget(self.input)
 
+        # Mic button
+        self.mic_btn = QPushButton()
+        self.mic_btn.setObjectName("iconbtn")
+        self.mic_btn.setFixedSize(40, 40)
+        self.mic_btn.setIcon(svg_icon(ICONS["mic"], 18))
+        self.mic_btn.setIconSize(QSize(18, 18))
+        self.mic_btn.setCheckable(True)
+        self.mic_btn.clicked.connect(self._toggle_listen)
+        h.addWidget(self.mic_btn)
+
+        # Send button
         send = QPushButton()
         send.setObjectName("send")
         send.setFixedSize(40, 40)
@@ -281,6 +300,38 @@ class DemetriusUI(QMainWindow):
         return btn
 
     # ── ACTIONS ───────────────────────────────────────────────────────────────
+    
+    def _toggle_listen(self):
+        self._post("System", "Listening... (5 seconds)", "system")
+
+        def _listen_thread():
+            text = self.demetrius.voice.listen(duration=5)
+            if text:
+                self.input.setText(text)
+                self._send()
+            else:
+                self._post("System", "Could not hear anything.", "system")
+            self.mic_btn.setChecked(False)
+
+        from PyQt6.QtCore import QThread, pyqtSignal
+
+        class ListenThread(QThread):
+            done = pyqtSignal(str)
+            def run(self):
+                text = self.parent().demetrius.voice.listen(duration=5)
+                self.done.emit(text or "")
+
+        self.listen_thread = ListenThread(self)
+        self.listen_thread.done.connect(self._on_listen_done)
+        self.listen_thread.start()
+
+    def _on_listen_done(self, text):
+        self.mic_btn.setChecked(False)
+        if text:
+            self.input.setText(text)
+            self._send()
+        else:
+            self._post("System", "Could not hear anything.", "system")
 
     def _send(self):
         msg = self.input.text().strip()

@@ -5,6 +5,7 @@ from semantic_memory import SemanticMemory
 from core import Core
 from model_manager import ModelManager
 from personality import Personality
+from voice import Voice
 from config import NAME, VERSION, VALID_MOODS
 from exceptions import InvalidMoodError
 
@@ -22,6 +23,7 @@ class Demetrius(Assistant):
         self.semantic    = SemanticMemory()
         self.personality = Personality()
         self.models      = ModelManager()
+        self.voice       = Voice()
 
         cfg = self.models.load_config()
         self.core = Core(
@@ -44,14 +46,17 @@ class Demetrius(Assistant):
 
     @log_action
     def respond(self, message):
-        # Extract interests from message
         self.personality.extract_interests(message)
-
         self.memory.save_memory("user", message)
-        history             = list(self.memory.stream_history())
+        history            = list(self.memory.stream_history())
         self.semantic.add(message)
-        context             = self.semantic.search(message)
-        personality_prompt  = self.personality.build_personality_prompt()
-        response            = self.core.think(message, history, context, personality_prompt)
+        context            = self.semantic.search(message)
+        personality_prompt = self.personality.build_personality_prompt()
+        response           = self.core.think(message, history, context, personality_prompt)
         self.memory.save_memory("jarvis", response)
+
+        # Speak the response if voice is enabled
+        if self.voice.enabled:
+            self.voice.speak(response)
+
         return response
