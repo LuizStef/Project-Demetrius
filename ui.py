@@ -1,3 +1,4 @@
+import glob
 import profile
 import sys
 from PyQt6.QtWidgets import (
@@ -10,11 +11,14 @@ from PyQt6.QtCore import Qt, QThread, pyqtSignal, QSize
 from PyQt6.QtGui import QFont, QIcon, QColor, QPainter, QPixmap, QAction
 from PyQt6.QtSvgWidgets import QSvgWidget
 from PyQt6.QtCore import QByteArray
+from sympy import sec
 
+from security import Security, logger
 from smart_memory import SmartMemory
 from demetrius import Demetrius
 from automation import Automation
 from exceptions import DemetriusOfflineError
+
 
 # ─── THEME ────────────────────────────────────────────────────────────────────
 
@@ -164,7 +168,11 @@ class DemetriusUI(QMainWindow):
         self.setWindowTitle("Demetrius")
         self.resize(1000, 700)
         self.setMinimumSize(700, 500)
+        sec = Security()
+        if not sec.authenticate():
+            sys.exit(1)
 
+        self.security = sec
         # Boot
         self.memory   = SmartMemory()
         username      = self.memory.load_user() or "Luiz"
@@ -300,6 +308,16 @@ class DemetriusUI(QMainWindow):
         return btn
 
     # ── ACTIONS ───────────────────────────────────────────────────────────────
+    
+    def _view_logs(self):
+        import glob
+        logs = glob.glob("logs/*.log")
+        if logs:
+            with open(logs[-1]) as f:
+                content = f.read()[-2000:]
+            self._post("System", content, "system")
+        else:
+            self._post("System", "No logs found.", "system")
     
     def _toggle_listen(self):
         self._post("System", "Listening... (5 seconds)", "system")
@@ -499,6 +517,8 @@ class DemetriusUI(QMainWindow):
         menu.addSeparator()
         menu.addAction("Settings",        self._open_settings)
         menu.exec(self.mapToGlobal(self.rect().topRight()))
+        menu.addAction("Encrypted Backup", lambda: self._post("System", str(self.security.backup(encrypt=True)), "system"))
+        menu.addAction("View Logs",        self._view_logs)
 
     # ── POSTS ─────────────────────────────────────────────────────────────────
 

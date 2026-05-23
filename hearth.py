@@ -1,117 +1,92 @@
 from smart_memory import SmartMemory
 from demetrius import Demetrius
 from automation import Automation
+from security import Security, logger
 from exceptions import DemetriusOfflineError
+import sys
 
 def boot():
-    memory = SmartMemory()
+    security = Security()
+
+    # Authentication
+    if not security.authenticate():
+        logger.error("Access denied. Shutting down.")
+        sys.exit(1)
+
+    memory   = SmartMemory()
     username = memory.load_user()
 
     if not username:
         username = input("Hello! What's your name? ")
         memory.save_user(username)
 
+    logger.info(f"Demetrius booting for user: {username}")
     demetrius = Demetrius(username)
-    demetrius.soul.greet()
-    demetrius.introduce()
-
+    demetrius.security = security
     return demetrius
 
 def run():
     demetrius = boot()
-    auto = Automation()
+    auto      = Automation()
 
     print("\nType !help for available commands.\n")
 
     while True:
         message = input("You: ")
 
-        # ─── EXIT ───────────────────────────────────
         if message.lower() == "exit":
-            print(f"[{demetrius.name}]: Goodbye, {demetrius.soul.get_username()}!")
+            logger.info("Demetrius shutdown by user.")
+            print(f"[{demetrius.name}]: Goodbye!")
             break
-
-        # ─── MEMORY ─────────────────────────────────
         elif message.lower() == "!clear":
             demetrius.memory.clear_history()
             print("[System]: Memory cleared.")
-
         elif message.lower() == "!history":
             for row in demetrius.memory.load_history():
                 print(row)
-
         elif message.lower() == "!stats":
-            user_msgs = demetrius.memory.load_user_messages()
-            jarvis_msgs = demetrius.memory.load_jarvis_messages()
-            print(f"[System]: You sent {len(user_msgs)} messages.")
-            print(f"[System]: Demetrius replied {len(jarvis_msgs)} times.")
-
-        # ─── MOOD ───────────────────────────────────
-        elif message.lower() == "!mood":
-            print(f"[System]: Current mood: {demetrius.get_mood()}")
-
-        elif message.lower().startswith("!mood "):
-            mood = message.split(" ")[1]
-            try:
-                demetrius.set_mood(mood)
-                print(f"[System]: Mood changed to {mood}.")
-            except Exception as e:
-                print(f"[System]: {e}")
-
-        # ─── SYSTEM ─────────────────────────────────
-        elif message.lower().startswith("!open "):
-            app = message[6:].strip()
-            print(auto.open_app(app))
-
-        elif message.lower().startswith("!run "):
-            script = message[5:].strip()
-            print(auto.run_script(script))
-
+            u = len(demetrius.memory.load_user_messages())
+            d = len(demetrius.memory.load_jarvis_messages())
+            print(f"[System]: You: {u} | Demetrius: {d}")
+        elif message.lower() == "!backup":
+            result = demetrius.security.backup(encrypt=True)
+            print(f"[System]: Backup created: {result}")
+        elif message.lower() == "!restore":
+            backups = demetrius.security.list_backups()
+            if not backups:
+                print("[System]: No backups found.")
+            else:
+                for i, b in enumerate(backups):
+                    print(f"  {i} — {b}")
+                idx = input("Choose backup number: ")
+                if demetrius.security.restore(backups[int(idx)]):
+                    print("[System]: Restored successfully.")
+                else:
+                    print("[System]: Restore failed.")
+        elif message.lower() == "!logs":
+            import glob
+            logs = glob.glob("logs/*.log")
+            if logs:
+                with open(logs[-1]) as f:
+                    print(f.read()[-2000:])
         elif message.lower() == "!sysinfo":
             print(auto.sysinfo())
-
-        # ─── FILES ──────────────────────────────────
+        elif message.lower().startswith("!open "):
+            print(auto.open_app(message[6:].strip()))
+        elif message.lower().startswith("!run "):
+            print(auto.run_script(message[5:].strip()))
         elif message.lower().startswith("!ls"):
-            path = message[3:].strip() or "."
-            print(auto.list_files(path))
-
+            print(auto.list_files(message[3:].strip() or "."))
         elif message.lower().startswith("!mkdir "):
-            name = message[7:].strip()
-            print(auto.make_dir(name))
-
+            print(auto.make_dir(message[7:].strip()))
         elif message.lower().startswith("!find "):
-            filename = message[6:].strip()
-            print(auto.find_file(filename))
-
-        # ─── BACKUP ─────────────────────────────────
-        elif message.lower() == "!backup":
-            print(auto.backup())
-
-        # ─── HELP ───────────────────────────────────
-        elif message.lower() == "!help":
-            print("""
-[System]: Available commands:
-  exit              → Shutdown Demetrius
-  !clear            → Clear conversation history
-  !history          → Show conversation history
-  !stats            → Show message statistics
-  !mood             → Show current mood
-  !mood [value]     → Change mood (neutral/excited/tired)
-  !sysinfo          → Show system info (CPU, RAM, Disk)
-  !open [app]       → Open an application
-  !run [script.py]  → Run a Python script
-  !ls [path]        → List files in a directory
-  !mkdir [name]     → Create a directory
-  !find [file]      → Search for a file
-  !backup           → Backup the database
-""")
-
-        # ─── AI RESPONSE ────────────────────────────
+            print(auto.find_file(message[6:].strip()))
         else:
             try:
-                demetrius.respond(message)
+                response = demetrius.respond(message)
+                print(f"[{demetrius.name}]: {response}")
             except DemetriusOfflineError:
-                print(f"[{demetrius.name}]: I'm offline. Please start Ollama and try again.")
+                print(f"[{demetrius.name}]: Offline. Start Ollama.")
 
 if __name__ == "__main__":
     run()
